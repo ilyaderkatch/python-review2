@@ -1,25 +1,16 @@
-# import request
-# from vk import API        БИБЛИОТЕКИ ДЛЯ МОЕЙ ПОПЫТКИ ПАРСИТЬ ГРУППУ ВК
-# import vk
 import urllib.request
 from bs4 import BeautifulSoup
 import sqlite3
 import telebot
 
-token = '776134721:AAHSqHY5UDaGP45_-Dfvzoo-PBhriGFuod8'
-bot = telebot.TeleBot(token)
+
+with open('token.txt') as f:
+    token = f.readline()
+    bot = telebot.TeleBot(token)
 
 
 class AppURLopener(urllib.request.FancyURLopener):
     version = "Mozilla/5.0"
-
-
-def adaptation(s):
-    for i in range(0, len(s)):
-        s[i] = str(s[i])
-        s[i] = s[i].replace('<br/>', ' \n')
-        s[i] = s[i].replace('<div class="text">', '')
-        s[i] = s[i].replace('</div>', '')
 
 
 def generate_list(page):
@@ -27,12 +18,13 @@ def generate_list(page):
     response = opener.open('https://www.anekdot.ru/release/anekdot/year/2019/{0}'.format(page))
     html = response.read()
     html = html.decode('utf-8')
-    f = open('lupa', 'w')
-    f.write(html)
     soup = BeautifulSoup(html, 'html.parser')
-    paragraphs = soup.find_all('div', {'class': "text"})
-    adaptation(paragraphs)
-    return paragraphs
+    paragraphs = soup.find_all('div', {'class': "topicbox"})
+    anek_list = []
+    for item in paragraphs:
+        if (item.get('id') != None):
+            anek_list.append((int(item.get('id')), item.find('div', {'class': "text"}).text))
+    return anek_list
 
 
 class ListOfJokes:
@@ -55,10 +47,10 @@ class ListOfJokes:
             self.new_page()
 
     def get_joke(self):
-        return self.list[self.index]
+        return self.list[self.index][1]
 
     def generate_id_joke(self):
-        return self.page * 1000 + self.index
+        return self.list[self.index][0]
 
     def get_joke_from_index(self, id_joke):
         if id_joke == -1:
@@ -74,32 +66,43 @@ def get_text_messages(message):
     bot.send_message(message.from_user.id, "Я умею только читать(", reply_markup=keyboard1)
 
 
-@bot.message_handler(content_types=['text'])
+@bot.message_handler(commands=['help'])
 def get_text_messages(message):
-    if message.text.lower() == "привет":
-        bot.send_message(message.from_user.id, "Привет, напиши /joke и увидишь несмешную шутку с просторов рунета", reply_markup=keyboard1)
-    elif message.text == "/help":
-        bot.send_message(message.from_user.id, "/help - получить справку по боту \n"
+    bot.send_message(message.from_user.id, "/help - получить справку по боту \n"
                                                "/joke - увидеть новую шутку \n"
                                                "/mark - узнать среднюю оценку пользователей \n\n"
                                                "Напиши estimate и оценку от 0 до 10, чтобы оценит анекдот. Например, estimate 8 \n \n"
                                                "Напиши привет, just for fun\n\n"
                                                "/delete - для полной перезагрузки бота для твоего аккаунта\n", reply_markup=keyboard1)
-    elif message.text == "/joke":
-        take_new_joke(message)
-    elif message.text == "/start":
-        bot.send_message(message.chat.id, 'Привет, ты написал мне /start. Я выдаю лучшие(нет) шутки за 2019 год по версии сайта anekdot.ru. Для информации напиши /help', reply_markup=keyboard1)
-    elif message.text == "/mark":
-        bot.send_message(message.chat.id, get_avg_mark(A.prev_id), reply_markup=keyboard1)
+
+@bot.message_handler(commands=['joke'])
+def get_text_messages(message):
+    take_new_joke(message)
+
+
+@bot.message_handler(commands=['start'])
+def get_text_messages(message):
+    bot.send_message(message.chat.id, 'Привет, ты написал мне /start. Я выдаю лучшие(нет) шутки за 2019 год по версии сайта anekdot.ru. Для информации напиши /help', reply_markup=keyboard1)
+
+
+@bot.message_handler(commands=['mark'])
+def get_text_messages(message):
+    bot.send_message(message.chat.id, get_avg_mark(A.prev_id), reply_markup=keyboard1)
+
+
+@bot.message_handler(commands=['delete'])
+def get_text_messages(message):
+    delete_history(message.from_user.id)
+    bot.send_message(message.chat.id, 'history deleted', reply_markup=keyboard1)
+
+
+@bot.message_handler(content_types=['text'])
+def get_text_messages(message):
+    if message.text.lower() == "привет":
+        bot.send_message(message.from_user.id, "Привет, напиши /joke и увидишь несмешную шутку с просторов рунета", reply_markup=keyboard1)
     elif message.text.lower().find('estimate') != -1:
         message.text = message.text.lower()
         bot.send_message(message.chat.id, update_mark(message.chat.id, A.prev_id, message.text.replace('estimate ', '')), reply_markup=keyboard1)
-    # elif message.text == "/new":
-        # A.new_page()
-        # take_new_joke(message)
-    elif message.text == "/delete":
-        delete_history(message.from_user.id)
-        bot.send_message(message.chat.id, 'history deleted', reply_markup=keyboard1)
     else:
         bot.send_message(message.from_user.id, "Я тебя не понимаю. Напиши /help.", reply_markup=keyboard1)
 
@@ -209,22 +212,6 @@ def get_avg_mark(id_anek):
 with sqlite3.connect('example.db', check_same_thread=False) as conn:
     create_tables()
     bot.polling(none_stop=True, interval=1)
-    #select_all_sequences() вывести бд под конец
-    # delete_all_history() удаление всех строк
+    #select_all_sequences() #вывести бд под конец
+    # delete_all_history() #удаление всех строк
 
-
-"""
-def main():
-
-    access_token = '9fc2454999fc3016154da79d169e4684b7d352ebe71913397c1477a65951d8ce844cc8026389933c43a88'
-    session = vk.Session(access_token=access_token)
-    vkapi = vk.API(session)
-
-    api = API('9fc2454999fc3016154da79d169e4684b7d352ebe71913397c1477a65951d8ce844cc8026389933c43a88')
-    group_id = '-144822899'
-    r = requests.get('https://api.vk.com/method/wall_get&v=5.95&access_token=9fc2454999fc3016154da79d169e4684b7d352ebe71913397c1477a65951d8ce844cc8026389933c43a88', params={'owner_id': group_id, 'count': 1, 'offset' : 0})
-    #r = requests.get('https://api.vk.com/method/users.get?user_id=210700286&v=5.52&access_token=9fc2454999fc3016154da79d169e4684b7d352ebe71913397c1477a65951d8ce844cc8026389933c43a88')
-    print(type(r))
-    print(r.status_code)
-
-"""
